@@ -1,5 +1,35 @@
+from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+from config import settings
+
+
+class UserManager(BaseUserManager):
+    """Кастомный менеджер для модели User с email вместо username"""
+
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('Email обязателен')
+
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Суперпользователь должен иметь is_staff=True')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Суперпользователь должен иметь is_superuser=True')
+
+        return self.create_user(email, password, **extra_fields)
+
 
 class User(AbstractUser):
     """Модель пользователя"""
@@ -28,6 +58,8 @@ class User(AbstractUser):
         help_text="Загрузите фото",
     )
 
+    objects = UserManager()
+
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -38,3 +70,86 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class Payment(models.Model):
+    """Модель платежей"""
+
+    PAYMENT_METHOD_CASH = 'cash'
+    PAYMENT_METHOD_TRANSFER = 'transfer'
+
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_METHOD_CASH, 'Наличные'),
+        (PAYMENT_METHOD_TRANSFER, 'Перевод на счет'),
+    ]
+
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='payments',
+        verbose_name='Пользователь'
+    )
+
+    course = models.ForeignKey(
+        'lms.Course',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments',
+        verbose_name='Оплаченный курс'
+    )
+
+    lesson = models.ForeignKey(
+        'lms.Lesson',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payments',
+        verbose_name='Оплаченный урок'
+    )
+
+
+    payment_date = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата оплаты'
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Сумма оплаты'
+    )
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        verbose_name='Способ оплаты'
+    )
+
+    class Meta:
+        verbose_name = 'Платеж'
+        verbose_name_plural = 'Платежи'
+        ordering = ['-payment_date']
+
+    def __str__(self):
+        if self.course:
+            return f"{self.user.email} - {self.course.title} - {self.amount}"
+        elif self.lesson:
+            return f"{self.user.email} - {self.lesson.title} - {self.amount}"
+        else:
+            return f"{self.user.email} - {self.amount}"
+
+    def clean(self):
+        """Валидация: либо курс, либо урок должен быть заполнен"""
+        from django.core.exceptions import ValidationError
+
+        if not self.course and not self.lesson:
+            raise ValidationError('Необходимо указать либо курс, либо урок')
+
+        if self.course and self.lesson:
+            raise ValidationError('Нельзя указать одновременно и курс, и урок')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
