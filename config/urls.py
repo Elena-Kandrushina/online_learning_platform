@@ -7,6 +7,7 @@ from config import settings
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('lms/', include('lms.urls')),
+    path('users/', include('users.urls')),
 
 ]
 
