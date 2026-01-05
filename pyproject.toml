@@ -17,6 +17,7 @@ dependencies = [
     "django-extensions (>=4.1,<5.0)",
     "djangorestframework (>=3.16.1,<4.0.0)",
     "django-filter (>=25.2,<26.0)",
+    "djangorestframework-simplejwt (>=5.5.1,<6.0.0)",
 ]
 
 
