@@ -72,8 +72,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
-
         token['email'] = user.email
         return token
 
@@ -98,3 +96,25 @@ class UserSerializer(ModelSerializer):
             avatar=validated_data.get('avatar'),
         )
         return user
+
+class UserRetrieveSerializer(ModelSerializer):
+    """Сериализатор для получения информации о пользователе"""
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'phone_number', 'city', 'avatar', 'is_active']
+        read_only_fields = ['id', 'email', 'is_active']
+
+
+class UserUpdateSerializer(ModelSerializer):
+    """Сериализатор для обновления пользователя с ограничениями"""
+    class Meta:
+        model = User
+        fields = ['phone_number', 'city', 'avatar']
+
+    def update(self, instance, validated_data):
+        """Обновление только разрешенных полей"""
+        instance.phone_number = validated_data.get('phone_number', instance.phone_number)
+        instance.city = validated_data.get('city', instance.city)
+        instance.avatar = validated_data.get('avatar', instance.avatar)
+        instance.save()
+        return instance
