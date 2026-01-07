@@ -1,11 +1,21 @@
 from django.db import models
 
+from config import settings
+
 
 class Course(models.Model):
     """Модель курса"""
     title = models.CharField(max_length=255, verbose_name='Название')
     preview = models.ImageField(upload_to='course_previews/', verbose_name='Превью', blank=True, null=True)
     description = models.TextField(verbose_name='Описание', blank=True, null=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Владелец',
+        related_name='courses'
+    )
 
     class Meta:
         verbose_name = 'Курс'
@@ -26,6 +36,14 @@ class Lesson(models.Model):
         related_name='lessons',
         verbose_name='Курс'
 
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Владелец',
+        related_name='lessons'
     )
 
     class Meta:

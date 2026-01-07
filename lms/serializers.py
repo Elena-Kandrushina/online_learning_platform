@@ -8,14 +8,18 @@ class LessonSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Lesson
-        fields = ['id', 'title', 'preview', 'description', 'video_link']
+        fields = ['id', 'title', 'preview', 'description', 'video_link', 'owner']
+        read_only_fields = ['id', 'owner']
+        extra_kwargs = {'owner': {'read_only': True}}
 
 
 class CourseSerializer(serializers.ModelSerializer):
     """Сериализатор для курса"""
     class Meta:
         model = Course
-        fields = ['id', 'title', 'preview', 'description']
+        fields = ['id', 'title', 'preview', 'description', 'owner']
+        read_only_fields = ['id', 'owner']
+        extra_kwargs = {'owner': {'read_only': True}}
 
 
 class CourseDetailSerializer(serializers.ModelSerializer):
@@ -29,8 +33,4 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ['id', 'title', 'preview', 'description', 'lessons_count', 'lessons']
-
-
-
-
-
+        read_only_fields = ['id', 'owner', 'lessons_count', 'lessons']
