@@ -1,4 +1,4 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, serializers
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,6 +12,7 @@ from users.serializers import (
     UserUpdateSerializer,
     UserRetrieveSerializer,
 )
+from users.services import create_payment_in_stripe
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -21,21 +22,46 @@ class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
 
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["course", "lesson", "payment_method"]
+    filterset_fields = ["course", "lesson", "payment_method", "payment_status", "is_paid"]
     ordering_fields = ["payment_date", "amount"]
     ordering = ["-payment_date"]
 
     def get_queryset(self):
         """Фильтрация платежей по пользователю"""
+
+        if getattr(self, 'swagger_fake_view', False):
+            return Payment.objects.none()
+
         user = self.request.user
 
         if user.is_superuser or user.groups.filter(name="moderators").exists():
             return Payment.objects.all()
-        return Payment.objects.filter(user=user)
+
+        if user.is_authenticated:
+            return Payment.objects.filter(user=user)
+
+        return Payment.objects.none()
 
     def perform_create(self, serializer):
         """Автоматическое назначение пользователя при создании платежа"""
-        serializer.save(user=self.request.user)
+
+        payment = serializer.save(user=self.request.user)
+
+        if payment.payment_method == Payment.PAYMENT_METHOD_TRANSFER:
+            try:
+                stripe_data = create_payment_in_stripe(payment)
+
+                payment.stripe_product_id = stripe_data['stripe_product_id']
+                payment.stripe_price_id = stripe_data['stripe_price_id']
+                payment.stripe_session_id = stripe_data['stripe_session_id']
+                payment.stripe_payment_link = stripe_data['stripe_payment_link']
+                payment.save()
+
+            except Exception as e:
+                payment.delete()
+                raise serializers.ValidationError(
+                    f"Ошибка при создании платежа в Stripe: {str(e)}"
+                )
 
 
 class UserViewSet(viewsets.ModelViewSet):

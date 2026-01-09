@@ -5,16 +5,40 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from users.models import Payment, User
 
 
+
 class PaymentSerializer(serializers.ModelSerializer):
-    """Сериализатор для платежей"""
+    """Сериализатор для платежей с Stripe"""
 
     user = serializers.StringRelatedField(read_only=True)
-    course = serializers.StringRelatedField(read_only=True)
-    lesson = serializers.StringRelatedField(read_only=True)
+    course_title = serializers.CharField(source='course.title', read_only=True, allow_null=True)
+    lesson_title = serializers.CharField(source='lesson.title', read_only=True, allow_null=True)
 
     payment_method_display = serializers.CharField(
         source='get_payment_method_display',
         read_only=True
+    )
+
+    payment_status_display = serializers.CharField(
+        source='get_payment_status_display',
+        read_only=True
+    )
+
+    stripe_payment_link = serializers.URLField(read_only=True)
+
+    course_id = serializers.PrimaryKeyRelatedField(
+        queryset=Payment._meta.get_field('course').remote_field.model.objects.all(),
+        source='course',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    lesson_id = serializers.PrimaryKeyRelatedField(
+        queryset=Payment._meta.get_field('lesson').remote_field.model.objects.all(),
+        source='lesson',
+        write_only=True,
+        required=False,
+        allow_null=True
     )
 
     class Meta:
@@ -24,12 +48,64 @@ class PaymentSerializer(serializers.ModelSerializer):
             'user',
             'payment_date',
             'course',
+            'course_id',
+            'course_title',
             'lesson',
+            'lesson_id',
+            'lesson_title',
             'amount',
             'payment_method',
-            'payment_method_display'
+            'payment_method_display',
+            'payment_status',
+            'payment_status_display',
+            'is_paid',
+            'stripe_payment_link',
+            'stripe_product_id',
+            'stripe_price_id',
+            'stripe_session_id',
         ]
-        read_only_fields = ['id', 'payment_date']
+        read_only_fields = [
+            'id',
+            'user',
+            'payment_date',
+            'course',
+            'lesson',
+            'course_title',
+            'lesson_title',
+            'payment_status',
+            'payment_status_display',
+            'is_paid',
+            'stripe_payment_link',
+            'stripe_product_id',
+            'stripe_price_id',
+            'stripe_session_id',
+        ]
+
+    def validate(self, data):
+        """Валидация данных платежа"""
+        course = data.get('course')
+        lesson = data.get('lesson')
+
+        if not course and not lesson:
+            raise serializers.ValidationError(
+                "Необходимо указать либо курс, либо урок"
+            )
+
+        if course and lesson:
+            raise serializers.ValidationError(
+                "Нельзя указать одновременно и курс, и урок"
+            )
+
+        payment_method = data.get('payment_method')
+        amount = data.get('amount')
+
+        if payment_method == Payment.PAYMENT_METHOD_TRANSFER:
+            if not amount or amount <= 0:
+                raise serializers.ValidationError(
+                    "Для оплаты через Stripe сумма должна быть больше 0"
+                )
+
+        return data
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -76,14 +152,46 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
 
+class UserPaymentSerializer(serializers.ModelSerializer):
+    """Сериализатор для отображения платежей в профиле пользователя"""
+
+    course_title = serializers.CharField(source='course.title', read_only=True, allow_null=True)
+    lesson_title = serializers.CharField(source='lesson.title', read_only=True, allow_null=True)
+    payment_method_display = serializers.CharField(
+        source='get_payment_method_display',
+        read_only=True
+    )
+    payment_status_display = serializers.CharField(
+        source='get_payment_status_display',
+        read_only=True
+    )
+
+    class Meta:
+        model = Payment
+        fields = [
+            'id',
+            'payment_date',
+            'amount',
+            'payment_method',
+            'payment_method_display',
+            'payment_status',
+            'payment_status_display',
+            'is_paid',
+            'course_title',
+            'lesson_title',
+            'stripe_payment_link'
+        ]
+        read_only_fields = fields
+
 class UserSerializer(ModelSerializer):
     """Сериализатор для пользователя"""
     password = serializers.CharField(write_only=True, required=True)
+    payments = UserPaymentSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'password', 'phone_number', 'city', 'avatar', 'is_active']
-        read_only_fields = ['id', 'is_active']
+        fields = ['id', 'email', 'password', 'phone_number', 'city', 'avatar', 'is_active', 'payments']
+        read_only_fields = ['id', 'is_active', 'payments']
 
     def create(self, validated_data):
         """Создание пользователя с хешированием пароля"""
@@ -99,10 +207,12 @@ class UserSerializer(ModelSerializer):
 
 class UserRetrieveSerializer(ModelSerializer):
     """Сериализатор для получения информации о пользователе"""
+    payments = UserPaymentSerializer(many=True, read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'email', 'phone_number', 'city', 'avatar', 'is_active']
-        read_only_fields = ['id', 'email', 'is_active']
+        fields = ['id', 'email', 'phone_number', 'city', 'avatar', 'is_active', 'payments']
+        read_only_fields = ['id', 'email', 'is_active', 'payments']
 
 
 class UserUpdateSerializer(ModelSerializer):
