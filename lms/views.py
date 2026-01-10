@@ -8,6 +8,7 @@ from lms.paginators import CoursePaginator, LessonPaginator
 from lms.serializers import CourseSerializer, LessonSerializer, CourseDetailSerializer
 from rest_framework import viewsets, generics, status
 from users.permissions import IsNotModerator, IsOwnerOrModerator
+from lms.tasks import send_course_update_notification
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -49,6 +50,13 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """При создании курса устанавливаем владельца"""
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        """При обновлении курса отправляем уведомления подписчикам"""
+
+        instance = serializer.save()
+        send_course_update_notification.delay(instance.id)
+        return instance
 
 
 class LessonListCreateAPIView(generics.ListCreateAPIView):
@@ -116,6 +124,14 @@ class LessonUpdateAPIView(generics.UpdateAPIView):
 
         return Lesson.objects.filter(owner=user)
 
+    def perform_update(self, serializer):
+        """При обновлении урока отправляем уведомления подписчикам курса"""
+        instance = serializer.save()
+        if instance.course:
+            send_course_update_notification.delay(instance.course.id)
+
+        return instance
+
 
 class LessonDestroyAPIView(generics.DestroyAPIView):
     """Удаление урока с фильтрацией по владельцу"""
@@ -156,10 +172,17 @@ class SubscriptionAPIView(APIView):
 
             subscription.delete()
             message = 'подписка удалена'
+            subscribed = False
         else:
 
             Subscription.objects.create(user=user, course=course)
             message = 'подписка добавлена'
+            subscribed = True
 
-        return Response({'message': message})
+        return Response({
+            'message': message,
+            'subscribed': subscribed,
+            'course_id': course_id,
+            'course_title': course.title
+        })
 
