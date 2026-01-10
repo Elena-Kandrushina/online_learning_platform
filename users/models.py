@@ -83,6 +83,17 @@ class Payment(models.Model):
         (PAYMENT_METHOD_TRANSFER, 'Перевод на счет'),
     ]
 
+    STATUS_PENDING = 'pending'
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELED = 'canceled'
+
+    PAYMENT_STATUS_CHOICES = [
+        (STATUS_PENDING, 'Ожидает оплаты'),
+        (STATUS_SUCCEEDED, 'Оплачено'),
+        (STATUS_FAILED, 'Ошибка оплаты'),
+        (STATUS_CANCELED, 'Отменено'),
+    ]
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -126,6 +137,45 @@ class Payment(models.Model):
         choices=PAYMENT_METHOD_CHOICES,
         verbose_name='Способ оплаты'
     )
+    stripe_product_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name='ID продукта в Stripe'
+    )
+
+    stripe_price_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name='ID цены в Stripe'
+    )
+
+    stripe_session_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        verbose_name='ID сессии в Stripe'
+    )
+
+    stripe_payment_link = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='Ссылка на оплату Stripe'
+    )
+
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name='Статус оплаты'
+    )
+
+    is_paid = models.BooleanField(
+        default=False,
+        verbose_name='Оплачено'
+    )
 
     class Meta:
         verbose_name = 'Платеж'
@@ -152,4 +202,8 @@ class Payment(models.Model):
 
     def save(self, *args, **kwargs):
         self.clean()
+        if self.payment_status == self.STATUS_SUCCEEDED:
+            self.is_paid = True
+        else:
+            self.is_paid = False
         super().save(*args, **kwargs)

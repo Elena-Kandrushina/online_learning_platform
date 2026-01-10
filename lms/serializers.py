@@ -22,7 +22,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ['id', 'title', 'preview', 'description', 'owner']
+        fields = ['id', 'title', 'preview', 'description', 'owner', 'is_subscribed']
         read_only_fields = ['id', 'owner']
         extra_kwargs = {'owner': {'read_only': True}}
 
