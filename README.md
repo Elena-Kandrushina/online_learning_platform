@@ -46,6 +46,54 @@ git@github.com:Elena-Kandrushina/online_learning_platform.git
 ```
 poetry install
 ```
+## Запуск проекта через Docker Compose
+## Отредактируйте файл .env и заполните минимальные настройки:
+```
+SECRET_KEY=ваш-секретный-ключ
+DEBUG=True
+NAME=learning_platform
+USER=postgres
+PASSWORD=postgres
+HOST=db
+PORT=5432
+```
+## Основная команда для запуска:
+```
+docker-compose up -d
+```
+## Проверка статуса запуска:
+```
+docker-compose ps
+```
+## Проверка работоспособности каждого сервиса:
+Проверка бэкенда (Django):
+откройте в браузере: http://localhost:8000
+Проверка логов бэкенда:
+```
+docker-compose logs --tail=10 backend
+```
+Создание суперпользователя:
+```
+docker-compose exec backend python manage.py createsuperuser
+```
+Админка:
+http://localhost:8000/admin/
+## Проверка базы данных:
+```
+docker-compose exec db psql -U postgres -d learning_platform -c "SELECT version();"
+```
+## Проверка Redis:
+```
+docker-compose exec redis redis-cli ping
+```
+## Проверка Celery Worker(логи):
+```
+docker-compose logs --tail=10 celery
+```
+## Проверка Celery Beat (вывод логов):
+```
+docker-compose logs --tail=10 celery-beat
+```
 
 ## Документация:
 

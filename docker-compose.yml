@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: online_learning_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${NAME}
+      POSTGRES_USER: ${USER}
+      POSTGRES_PASSWORD: ${PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - learning_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: online_learning_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - learning_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: online_learning_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - NAME=${NAME}
+      - USER=${USER}
+      - PASSWORD=${PASSWORD}
+      - HOST=db
+      - PORT=5432
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - EMAIL_BACKEND=${EMAIL_BACKEND}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - ./:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - learning_network
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  celery:
+    build: .
+    container_name: online_learning_celery
+    restart: unless-stopped
+    command: >
+      sh -c "cd /app && poetry run celery -A config worker --loglevel=info"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - NAME=${NAME}
+      - USER=${USER}
+      - PASSWORD=${PASSWORD}
+      - HOST=db
+      - PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - learning_network
+
+  celery-beat:
+    build: .
+    container_name: online_learning_celery_beat
+    restart: unless-stopped
+    command: >
+      sh -c "cd /app && poetry run celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - NAME=${NAME}
+      - USER=${USER}
+      - PASSWORD=${PASSWORD}
+      - HOST=db
+      - PORT=5432
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - learning_network
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+
+networks:
+  learning_network:
+    driver: bridge
