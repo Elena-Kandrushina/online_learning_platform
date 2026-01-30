@@ -148,6 +148,14 @@ docker-compose logs web
 docker-compose logs nginx
 docker-compose logs db
 ```
+# Приложение доступно по адресу:
+```
+http://84.201.178.245/
+```
+админка:
+```
+http://84.201.178.245/admin/
+```
 
 ## Документация:
 
