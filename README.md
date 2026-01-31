@@ -95,6 +95,68 @@ docker-compose logs --tail=10 celery
 docker-compose logs --tail=10 celery-beat
 ```
 
+## Настройка сервера:
+Установите Docker и Docker Compose
+Настройка systemd сервиса:
+Создайте файл /etc/systemd/system/online-learning.service:
+```
+[Unit]
+Description=Online Learning Platform Docker Compose
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/kandr/online_learning_platform
+ExecStart=/usr/bin/docker-compose --env-file .env.prod up -d
+ExecStop=/usr/bin/docker-compose down
+User=kandr
+Group=docker
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+Запуск сервиса:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable online-learning.service
+sudo systemctl start online-learning.service
+```
+## CI/CD с GitHub Actions
+Добавьте следующие секреты:
+SERVER_HOST, SERVER_USER, SSH_PRIVATE_KEY, SECRET_KEY
+При каждом push в любую ветку запускаются тесты, после успешных тестов происходит деплой
+
+# Проверка статуса на сервере
+```
+sudo systemctl status online-learning.service
+```
+# Просмотр логов
+```
+sudo journalctl -u online-learning.service -n 50 --no-pager
+```
+# Все логи
+```
+docker-compose logs
+```
+# Отдельные сервисы
+```
+docker-compose logs web
+docker-compose logs nginx
+docker-compose logs db
+```
+# Приложение доступно по адресу:
+```
+http://84.201.178.245/
+```
+админка:
+```
+http://84.201.178.245/admin/
+```
+
 ## Документация:
 
 Дополнительную информацию о структуре проекта можно найти в [документации](docs/README.md).
